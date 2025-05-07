@@ -196,8 +196,21 @@ with col2:
 # GHG Flux Interpolation Map and Pie Chart
 st.subheader(f"🌡️ GHG Flux Interpolation Map & 📊 Emission of {selected_pollutant}")
 
-# Calculate GHG flux (example: simple scaling of pollutant concentration as a proxy for flux)
-df['GHG_Flux'] = df[selected_pollutant] * 0.1  # Example scaling factor for flux
+# Calculate GHG flux in mg/m²/min
+# Step 1: Convert concentration to mg/m³
+concentration_to_mass = {
+    "Methane (PPM)": 0.655,  # 1 PPM = 0.655 mg/m³ (CH₄, molar mass 16 g/mol)
+    "CO (PPM)": 1.15,        # 1 PPM = 1.15 mg/m³ (CO, molar mass 28 g/mol)
+    "CO2 (PPM)": 1.8,        # 1 PPM = 1.8 mg/m³ (CO₂, molar mass 44 g/mol)
+    "VOC (PPB)": 0.004       # 1 PPB = 0.004 mg/m³ (assuming avg molar mass ~100 g/mol)
+}
+# Step 2: Convert mg/m³ to mg/m²/min using a flux rate factor (placeholder: 0.01 m³/m²/min)
+flux_rate_factor = 0.01  # m³/m²/min (example value)
+
+# Calculate concentration in mg/m³
+df['Concentration (mg/m³)'] = df[selected_pollutant] * concentration_to_mass[selected_pollutant]
+# Calculate flux in mg/m²/min
+df['GHG_Flux'] = df['Concentration (mg/m³)'] * flux_rate_factor
 
 # Create container for flux map and pie chart
 flux_pie_container = st.container()
@@ -217,7 +230,7 @@ def create_flux_map(site_data, site_name, selected_pollutant):
 
     fig, ax = plt.subplots(figsize=(5, 5))
     c = ax.contourf(grid_x, grid_y, z_idw, cmap="nipy_spectral_r", levels=100)
-    plt.colorbar(c, ax=ax, label=f"{selected_pollutant} Flux (Scaled)")
+    plt.colorbar(c, ax=ax, label=f"{selected_pollutant} Flux (mg/m²/min)")
     ax.scatter(x, y, c='black', s=50, edgecolor='white')
     ax.set_title(f"IDW Interpolated {selected_pollutant} Flux - {site_name}")
     ax.set_xlabel("Longitude")
