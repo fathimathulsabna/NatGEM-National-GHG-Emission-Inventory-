@@ -7,12 +7,16 @@ import numpy as np
 from datetime import datetime
 from math import pow
 import uuid
+import matplotlib.dates as mdates
+import os
+import base64
+
+st.set_page_config(page_title="NatGEM National GHG Emission Inventory", layout="wide")
 
 # Clear all caches and set page config
 st.session_state.clear()
 st.cache_data.clear()
 st.cache_resource.clear()
-st.set_page_config(layout="wide")
 
 # Custom CSS to force side-by-side layout with no gap
 st.markdown("""
@@ -87,12 +91,61 @@ if df.empty:
     st.error("No data loaded. Please check the dataset and try again.")
     st.stop()
 
-# Header
-col1, col2 = st.columns([1, 5])
-with col1:
-    st.image("csir-niist-neeri-logo.png", width=100)
-with col2:
-    st.title("🛰️ NatGEM National GHG Emission Inventory")
+# Function to convert image to base64
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode('utf-8')
+
+# Get the current working directory and image paths
+cwd = os.getcwd()
+img_path_1 = os.path.join(cwd, "images/csir-neeri-logo.png")
+img_path_2 = os.path.join(cwd, "images/csir-nal-logo.png")
+img_path_3 = os.path.join(cwd, "images/csir-niist-logo.jpeg")
+
+# Convert images to base64
+img_base64_1 = get_base64_image(img_path_1)
+img_base64_2 = get_base64_image(img_path_2)
+img_base64_3 = get_base64_image(img_path_3)
+
+# Use base64 strings in the HTML
+st.markdown(f"""
+    <style>
+        .header-container {{
+            background-color: #d6f5d6;
+            padding: 20px;
+            border-radius: 8px;
+        }}
+        .logo-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .logo-group {{
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }}
+        .header-title {{
+            font-size: 28px;
+            font-weight: bold;
+            color: #134b13;
+            text-align: center;
+            flex-grow: 1;
+            margin-left: 20px;
+        }}
+    </style>
+
+    <div class="header-container">
+        <div class="logo-row">
+            <div class="logo-group">
+                <img src="data:image/png;base64,{img_base64_1}" width="90" alt="CSIR NEERI">
+                <img src="data:image/png;base64,{img_base64_2}" width="90" alt="CSIR NAL">
+                <img src="data:image/jpeg;base64,{img_base64_3}" width="100" alt="CSIR NIIST">
+            </div>
+            <div class="header-title">🛰️ NatGEM National GHG Emission Inventory</div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # Sidebar filters
 st.sidebar.header("🔧 Filter Options")
@@ -125,13 +178,14 @@ col1, col2 = map_container.columns(2)
 
 # Satellite Map (Left)
 with col1:
-    m = folium.Map(location=[df["Latitude"].mean(), df["Longitude"].mean()], zoom_start=15, tiles=None)
+    m = folium.Map(location=[df["Latitude"].mean(), df["Longitude"].mean()], zoom_start=15, tiles=None, max_zoom=23, control_scale=True)
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attr='Esri',
         name='Esri WorldImagery',
         overlay=False,
-        control=True
+        control=True,
+        max_zoom=23
     ).add_to(m)
 
     # Categorize concentrations
@@ -163,7 +217,11 @@ with col1:
     </div>
     """
     m.get_root().html.add_child(folium.Element(legend_html))
-    st_folium(m, width=400, height=400, key="satellite_map")
+
+    # Add zoom control and lat/lng popup to check zoom level
+    folium.LatLngPopup().add_to(m)  # Shows lat/lng and zoom level on click
+
+    st_folium(m, width=500, height=500, key="satellite_map")
 
 # IDW Interpolation (Right)
 with col2:
@@ -314,6 +372,27 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
 )
+
+st.subheader(f"📈 {selected_pollutant} Concentration Over Time")
+
+# Sort data by Time for plotting
+df_time = df.sort_values("Time")
+
+plt.figure(figsize=(12, 5))
+plt.plot(df_time["Time"], df_time[selected_pollutant], marker='o', linestyle='-')
+plt.xlabel("Date")
+plt.ylabel(f"{selected_pollutant} Concentration")
+plt.title(f"{selected_pollutant} Concentration Over Time at {selected_site}")
+plt.grid(True)
+plt.tight_layout()
+plt.xticks(rotation=45)
+
+# Format x-axis dates to show only date (no 00:00)
+plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+
+st.pyplot(plt)
+plt.close()
 
 # Note about missing temperature data
 if avg_temperature == "N/A":
