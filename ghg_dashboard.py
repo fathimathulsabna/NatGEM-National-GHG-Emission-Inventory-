@@ -259,7 +259,7 @@ with pie_col:
             'Count': sizes,
             'Threshold': [f"≤ {low_threshold:.2f}" if label == 'Low' else 
                           f"≤ {high_threshold:.2f}" if label == 'Moderate' else 
-                          f"> {high_threshold:.2f}" for label in labels]
+                          f">#{high_threshold:.2f}" for label in labels]
         })
 
         fig2 = px.pie(
@@ -284,13 +284,15 @@ with pie_col:
             margin=dict(t=50, b=50, l=50, r=50),
             annotations=[dict(
                 text=f"Total: {sum(sizes)}",
-                x=0.5, y=-0.1,
-                xref="paper", yref="paper",
+                x=0.5,
+                y=-0.05,
+                xref="paper",
+                yref="paper",
                 showarrow=False,
                 font=dict(size=12)
             )]
         )
-        st.plotly_chart(fig2, width=600, height=600)  # Slightly larger than satellite map
+        st.plotly_chart(fig2, width=550, height=550)  # Slightly larger pie chart
     else:
         st.warning("No data available for the pie chart.")
 
