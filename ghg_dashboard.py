@@ -428,6 +428,3 @@ plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 st.pyplot(plt)
 plt.close()
 
-# Note about missing temperature data
-if avg_temperature == "N/A":
-    st.markdown("*Note: Temperature data is not available in the current dataset.*")
