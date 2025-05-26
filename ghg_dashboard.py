@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 from datetime import datetime
 from math import pow
@@ -251,8 +252,19 @@ with col2:
     plt.colorbar(c, ax=ax, label=selected_pollutant)
     ax.scatter(x, y, c='black', s=50, edgecolor='white')
     ax.set_title(f"IDW Interpolated {selected_pollutant}")
+    
+    # Format x-axis (Longitude) as degrees with E/W
+    def lon_formatter(x, pos):
+        return f"{abs(x):.3f}°{'E' if x >= 0 else 'W'}"
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lon_formatter))
     ax.set_xlabel("Longitude")
+
+    # Format y-axis (Latitude) as degrees with N/S
+    def lat_formatter(y, pos):
+        return f"{abs(y):.3f}°{'N' if y >= 0 else 'S'}"
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lat_formatter))
     ax.set_ylabel("Latitude")
+
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
@@ -299,8 +311,19 @@ def create_flux_map(site_data, site_name, selected_pollutant):
     plt.colorbar(c, ax=ax, label=f"{selected_pollutant} Flux (mg/m²/min)")
     ax.scatter(x, y, c='black', s=50, edgecolor='white')
     ax.set_title(f"IDW Interpolated {selected_pollutant} Flux - {site_name}")
+
+    # Format x-axis (Longitude) as degrees with E/W
+    def lon_formatter(x, pos):
+        return f"{abs(x):.3f}°{'E' if x >= 0 else 'W'}"
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lon_formatter))
     ax.set_xlabel("Longitude")
+
+    # Format y-axis (Latitude) as degrees with N/S
+    def lat_formatter(y, pos):
+        return f"{abs(y):.3f}°{'N' if y >= 0 else 'S'}"
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lat_formatter))
     ax.set_ylabel("Latitude")
+
     return fig
 
 # Display flux map
@@ -380,6 +403,9 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
 )
+
+# Display average temperature
+st.markdown(f"**Average Temperature at {selected_site}:** {avg_temperature:.1f}°C" if avg_temperature != "N/A" else "**Average Temperature:** N/A")
 
 st.subheader(f"📈 {selected_pollutant} Concentration Over Time")
 
