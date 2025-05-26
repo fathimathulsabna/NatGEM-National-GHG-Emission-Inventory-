@@ -51,6 +51,7 @@ def load_data():
         df = pd.read_csv("Data Analytics Dashboard.csv", encoding_errors='ignore')
         # Clean column names: strip whitespace, replace special characters
         df.columns = df.columns.str.strip().str.replace('\u202f', '').str.replace('\xa0', '').str.replace('°C', 'C')
+        # Note: If 'Time' column has a consistent format (e.g., 'YYYY-MM-DD'), specify it to avoid warning, e.g., pd.to_datetime(df['Time'], format='%Y-%m-%d')
         df['Time'] = pd.to_datetime(df['Time'], errors='coerce')
         
         # Define required columns (excluding Temperature for now)
@@ -96,11 +97,11 @@ def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
-# Get the current working directory and image paths (logos in same directory as script)
+# Get the current working directory and image paths
 cwd = os.getcwd()
-img_path_1 = os.path.join(cwd, "csir-neeri-logo.png")
-img_path_2 = os.path.join(cwd, "csir-nal-logo.png")
-img_path_3 = os.path.join(cwd, "csir-niist-logo.jpeg")
+img_path_1 = os.path.join(cwd, "images/csir-neeri-logo.png")
+img_path_2 = os.path.join(cwd, "images/csir-nal-logo.png")
+img_path_3 = os.path.join(cwd, "images/csir-niist-logo.jpeg")
 
 # Convert images to base64
 img_base64_1 = get_base64_image(img_path_1)
@@ -191,6 +192,7 @@ with col1:
     # Categorize concentrations
     quantiles = df[selected_pollutant].quantile([0.33, 0.66]).values
     low_threshold, high_threshold = quantiles[0], quantiles[1]
+    medium_value = (low_threshold + high_threshold) / 2  # Calculate medium concentration as average of low and high thresholds
 
     def get_marker_color(value):
         if value <= low_threshold: return 'green'
@@ -208,11 +210,11 @@ with col1:
 
     # Legend
     legend_html = f"""
-    <div style="position: fixed; bottom: 50px; left: 50px; width: 150px; height: 90px; 
-    background-color: white; border:2px solid grey; z-index:9999; font-size:14px;">
+    <div style="position: fixed; bottom: 50px; left: 50px; width: 180px; height: 110px; 
+    background-color: black; border:2px solid grey; z-index:9999; font-size:14px; color: white;">
       <b>{selected_pollutant} Concentration</b> <br>
       <i class="fa fa-map-marker" style="color:green"></i> Low (≤ {low_threshold:.2f})<br>
-      <i class="fa fa-map-marker" style="color:yellow"></i> Moderate (≤ {high_threshold:.2f})<br>
+      <i class="fa fa-map-marker" style="color:yellow"></i> Moderate ({medium_value:.2f})<br>
       <i class="fa fa-map-marker" style="color:red"></i> High (> {high_threshold:.2f})
     </div>
     """
@@ -235,8 +237,11 @@ with col2:
     values = df[selected_pollutant].values
     x, y = points[:, 0], points[:, 1]
 
-    grid_lon = np.linspace(x.min(), x.max(), 15)
-    grid_lat = np.linspace(y.min(), y.max(), 15)
+    # Add padding to ensure all points are visible
+    lon_padding = (x.max() - x.min()) * 0.1  # 10% of longitude range
+    lat_padding = (y.max() - y.min()) * 0.1  # 10% of latitude range
+    grid_lon = np.linspace(x.min() - lon_padding, x.max() + lon_padding, 15)
+    grid_lat = np.linspace(y.min() - lat_padding, y.max() + lat_padding, 15)
     grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
 
     z_idw = idw_interpolation(x, y, values, grid_x, grid_y)
@@ -280,8 +285,11 @@ def create_flux_map(site_data, site_name, selected_pollutant):
     values = site_data['GHG_Flux'].values
     x, y = points[:, 0], points[:, 1]
 
-    grid_lon = np.linspace(x.min(), x.max(), 15)
-    grid_lat = np.linspace(y.min(), y.max(), 15)
+    # Add padding to ensure all points are visible
+    lon_padding = (x.max() - x.min()) * 0.1  # 10% of longitude range
+    lat_padding = (y.max() - y.min()) * 0.1  # 10% of latitude range
+    grid_lon = np.linspace(x.min() - lon_padding, x.max() + lon_padding, 15)
+    grid_lat = np.linspace(y.min() - lat_padding, y.max() + lat_padding, 15)
     grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
 
     z_idw = idw_interpolation(x, y, values, grid_x, grid_y)
