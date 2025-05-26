@@ -97,11 +97,11 @@ def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode('utf-8')
 
-# Get the current working directory and image paths
+# Get the current working directory and image paths (logos in same directory as script)
 cwd = os.getcwd()
-img_path_1 = os.path.join(cwd, "images/csir-neeri-logo.png")
-img_path_2 = os.path.join(cwd, "images/csir-nal-logo.png")
-img_path_3 = os.path.join(cwd, "images/csir-niist-logo.jpeg")
+img_path_1 = os.path.join(cwd, "csir-neeri-logo.png")
+img_path_2 = os.path.join(cwd, "csir-nal-logo.png")
+img_path_3 = os.path.join(cwd, "csir-niist-logo.jpeg")
 
 # Convert images to base64
 img_base64_1 = get_base64_image(img_path_1)
