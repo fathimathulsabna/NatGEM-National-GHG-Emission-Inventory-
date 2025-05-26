@@ -11,6 +11,7 @@ import uuid
 import matplotlib.dates as mdates
 import os
 import base64
+import plotly.express as px
 
 st.set_page_config(page_title="NatGEM National GHG Emission Inventory", layout="wide")
 
@@ -19,7 +20,7 @@ st.session_state.clear()
 st.cache_data.clear()
 st.cache_resource.clear()
 
-# Custom CSS to force side-by-side layout with no gap
+# Custom CSS to force side-by-side layout with no gap and style the table
 st.markdown("""
 <style>
 /* Remove all gaps between components */
@@ -42,6 +43,20 @@ st.markdown("""
 .stContainer {
     padding: 0px !important;
 }
+/* Style the dataframe table with light green background */
+.stDataFrame table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.stDataFrame th, .stDataFrame td {
+    background-color: #d6f5d6 !important;
+    border: 1px solid #ccc !important;
+    padding: 8px !important;
+    text-align: center !important;
+}
+.stDataFrame th {
+    font-weight: bold !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,7 +67,6 @@ def load_data():
         df = pd.read_csv("Data Analytics Dashboard.csv", encoding_errors='ignore')
         # Clean column names: strip whitespace, replace special characters
         df.columns = df.columns.str.strip().str.replace('\u202f', '').str.replace('\xa0', '').str.replace('°C', 'C')
-        # Note: If 'Time' column has a consistent format (e.g., 'YYYY-MM-DD'), specify it to avoid warning, e.g., pd.to_datetime(df['Time'], format='%Y-%m-%d')
         df['Time'] = pd.to_datetime(df['Time'], errors='coerce')
         
         # Define required columns (excluding Temperature for now)
@@ -171,12 +185,17 @@ else:
 pollutants = ["Methane (PPM)", "CO (PPM)", "CO2 (PPM)", "VOC (PPB)"]
 selected_pollutant = st.sidebar.selectbox("Select GHG for Interpolation & Pie Chart", pollutants)
 
-# Combined maps section
-st.subheader("📍 Dumping Site & 🌡️ IDW Interpolation Heatmap")
+# Calculate thresholds for pie chart and satellite map
+quantiles = df[selected_pollutant].quantile([0.33, 0.66]).values
+low_threshold, high_threshold = quantiles[0], quantiles[1]
+medium_value = (low_threshold + high_threshold) / 2  # Calculate medium concentration
 
-# Create container with columns
-map_container = st.container()
-col1, col2 = map_container.columns(2)
+# Dumping Site Map and Pie Chart
+st.subheader(f"📍 Dumping Site & 📊 Emission of {selected_pollutant}")
+
+# Create container for satellite map and pie chart
+map_pie_container = st.container()
+col1, pie_col = map_pie_container.columns(2)
 
 # Satellite Map (Left)
 with col1:
@@ -189,11 +208,6 @@ with col1:
         control=True,
         max_zoom=23
     ).add_to(m)
-
-    # Categorize concentrations
-    quantiles = df[selected_pollutant].quantile([0.33, 0.66]).values
-    low_threshold, high_threshold = quantiles[0], quantiles[1]
-    medium_value = (low_threshold + high_threshold) / 2  # Calculate medium concentration as average of low and high thresholds
 
     def get_marker_color(value):
         if value <= low_threshold: return 'green'
@@ -226,7 +240,68 @@ with col1:
 
     st_folium(m, width=500, height=500, key="satellite_map")
 
-# IDW Interpolation (Right)
+# Interactive Pie Chart (Right)
+with pie_col:
+    low_count = len(df[df[selected_pollutant] <= low_threshold])
+    moderate_count = len(df[(df[selected_pollutant] > low_threshold) & (df[selected_pollutant] <= high_threshold)])
+    high_count = len(df[df[selected_pollutant] > high_threshold])
+
+    labels = ['Low', 'Moderate', 'High']
+    sizes = [low_count, moderate_count, high_count]
+    colors = ['green', 'yellow', 'red']
+
+    # Filter out zero-count categories
+    valid_data = [(label, size, color) for label, size, color in zip(labels, sizes, colors) if size > 0]
+    if valid_data:
+        labels, sizes, colors = zip(*valid_data)
+        pie_data = pd.DataFrame({
+            'Category': labels,
+            'Count': sizes,
+            'Threshold': [f"≤ {low_threshold:.2f}" if label == 'Low' else 
+                          f"≤ {high_threshold:.2f}" if label == 'Moderate' else 
+                          f"> {high_threshold:.2f}" for label in labels]
+        })
+
+        fig2 = px.pie(
+            pie_data,
+            names='Category',
+            values='Count',
+            title=None,
+            color_discrete_sequence=colors
+        )
+        fig2.update_traces(
+            textinfo='percent+label',
+            pull=[0.05] * len(sizes),
+            textfont=dict(size=12),
+            customdata=pie_data[['Threshold']],
+            hovertemplate='%{label}: %{value} (%{percent})<br>Threshold: %{customdata[0]}'
+        )
+        fig2.update_layout(
+            legend=dict(
+                title=f"{selected_pollutant} Thresholds",
+                font=dict(size=10)
+            ),
+            margin=dict(t=50, b=50, l=50, r=50),
+            annotations=[dict(
+                text=f"Total: {sum(sizes)}",
+                x=0.5, y=-0.1,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=12)
+            )]
+        )
+        st.plotly_chart(fig2, width=600, height=600)  # Slightly larger than satellite map
+    else:
+        st.warning("No data available for the pie chart.")
+
+# Interpolation Heatmaps
+st.subheader("🌡️ Interpolation Heatmaps")
+
+# Create container for IDW and flux interpolation maps
+interp_container = st.container()
+col2, flux_col = interp_container.columns(2)
+
+# IDW Interpolation (Left)
 with col2:
     def idw_interpolation(x, y, z, xi, yi, power=2):
         dist = np.sqrt((x[:, None, None] - xi[None, :, :])**2 + (y[:, None, None] - yi[None, :, :])**2)
@@ -268,38 +343,27 @@ with col2:
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
-# GHG Flux Interpolation Map and Pie Chart
-st.subheader(f"🌡️ GHG Flux Interpolation Map & 📊 Emission of {selected_pollutant}")
-
+# GHG Flux Interpolation Map (Right)
 # Calculate GHG flux in mg/m²/min
-# Step 1: Convert concentration to mg/m³
 concentration_to_mass = {
     "Methane (PPM)": 0.655,  # 1 PPM = 0.655 mg/m³ (CH₄, molar mass 16 g/mol)
     "CO (PPM)": 1.15,        # 1 PPM = 1.15 mg/m³ (CO, molar mass 28 g/mol)
     "CO2 (PPM)": 1.8,        # 1 PPM = 1.8 mg/m³ (CO₂, molar mass 44 g/mol)
     "VOC (PPB)": 0.004       # 1 PPB = 0.004 mg/m³ (assuming avg molar mass ~100 g/mol)
 }
-# Step 2: Convert mg/m³ to mg/m²/min using a flux rate factor (placeholder: 0.01 m³/m²/min)
 flux_rate_factor = 0.01  # m³/m²/min (example value)
-
-# Calculate concentration in mg/m³
 df['Concentration (mg/m³)'] = df[selected_pollutant] * concentration_to_mass[selected_pollutant]
-# Calculate flux in mg/m²/min
 df['GHG_Flux'] = df['Concentration (mg/m³)'] * flux_rate_factor
 
-# Create container for flux map and pie chart
-flux_pie_container = st.container()
-flux_col, pie_col = flux_pie_container.columns(2)  # Two columns for side-by-side display
-
-# Generate flux map for the selected site
+# Generate flux map
 def create_flux_map(site_data, site_name, selected_pollutant):
     points = site_data[['Longitude', 'Latitude']].values
     values = site_data['GHG_Flux'].values
     x, y = points[:, 0], points[:, 1]
 
     # Add padding to ensure all points are visible
-    lon_padding = (x.max() - x.min()) * 0.1  # 10% of longitude range
-    lat_padding = (y.max() - y.min()) * 0.1  # 10% of latitude range
+    lon_padding = (x.max() - x.min()) * 0.1
+    lat_padding = (y.max() - y.min()) * 0.1
     grid_lon = np.linspace(x.min() - lon_padding, x.max() + lon_padding, 15)
     grid_lat = np.linspace(y.min() - lat_padding, y.max() + lat_padding, 15)
     grid_x, grid_y = np.meshgrid(grid_lon, grid_lat)
@@ -336,37 +400,6 @@ with flux_col:
     else:
         st.warning(f"No data available for {selected_site}.")
 
-# Pie chart
-with pie_col:
-    low_count = len(df[df[selected_pollutant] <= low_threshold])
-    moderate_count = len(df[(df[selected_pollutant] > low_threshold) & (df[selected_pollutant] <= high_threshold)])
-    high_count = len(df[df[selected_pollutant] > high_threshold])
-
-    labels = ['Low', 'Moderate', 'High']
-    sizes = [low_count, moderate_count, high_count]
-    colors = ['green', 'yellow', 'red']
-    explode = (0.05, 0.05, 0.05)
-
-    fig2, ax2 = plt.subplots(figsize=(5, 5))
-    ax2.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
-            startangle=90, textprops={'fontsize': 12})
-    ax2.axis('equal')
-    ax2.set_title(f"{selected_pollutant} Emission Levels", fontsize=14, pad=10)
-
-    plt.legend(
-        labels=[
-            f"Low (≤ {low_threshold:.2f})",
-            f"Moderate (≤ {high_threshold:.2f})",
-            f"High (> {high_threshold:.2f})"
-        ],
-        loc="best",
-        fontsize=10
-    )
-
-    plt.tight_layout()
-    st.pyplot(fig2, use_container_width=True)
-    plt.close(fig2)
-
 # Average Values Table
 st.subheader("📊 Average Values with time at the location")
 
@@ -397,7 +430,7 @@ avg_data = {
 }
 avg_df = pd.DataFrame(avg_data)
 
-# Display the table
+# Display the table with light green styling
 st.dataframe(
     avg_df,
     use_container_width=True,
@@ -427,4 +460,3 @@ plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 
 st.pyplot(plt)
 plt.close()
-
